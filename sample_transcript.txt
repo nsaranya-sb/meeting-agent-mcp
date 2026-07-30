@@ -1,0 +1,13 @@
+Meeting: IAM Modernisation - Weekly Sync
+Date: 2026-07-21
+Attendees: Sri (Delivery Lead), Raj (Eng Lead), Priya (BA), Tom (Security)
+
+[10:02] Sri: Let's do a quick round-up. Raj, where are we on the UER data mapping fix?
+[10:03] Raj: Still blocked - the source spreadsheet columns shifted again last week and broke Julia's macro. We need someone to own a proper fix, not another patch.
+[10:04] Sri: Okay, let's raise that as a ticket - high priority, since it's blocking the whole review cycle. Priya can you write up the description with the failure pattern?
+[10:05] Priya: Yes, I'll cover the last two failure modes we've seen.
+[10:06] Tom: Also flagging - the GAME request form is still routing password reset requests to the wrong queue. Chatbot isn't catching the intent properly.
+[10:07] Sri: Let's log that too, medium priority for now, but I want eyes on it before next month's audit.
+[10:09] Sri: On the follow-up cadence - let's check back in on both of these in a week rather than waiting for the usual bi-weekly slot, given the audit timeline.
+[10:10] Raj: Agreed, a week works.
+[10:11] Sri: Great, I'll get a summary out to the team channel so anyone not on this call is looped in. Thanks all.

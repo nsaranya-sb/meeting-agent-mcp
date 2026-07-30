@@ -1,0 +1,25 @@
+{
+  "tickets": [
+    {
+      "id": "AICOE-101",
+      "title": "Fix UER data mapping - replace fragile macro",
+      "description": "Source spreadsheet columns shifted again, broke Karen's macro. Needs a proper contextual mapping fix, not another patch.",
+      "priority": "High",
+      "status": "To Do",
+      "created_at": "2026-07-30T17:26:09.096775"
+    }
+  ],
+  "slack_posts": [
+    {
+      "channel": "#project-updates",
+      "summary": "IAM sync: UER mapping fix raised as high priority ticket. GAME routing issue logged medium priority. Follow-up in 1 week given audit timeline.",
+      "posted_at": "2026-07-30T17:26:09.098877"
+    }
+  ],
+  "followups": [
+    {
+      "title": "Check status of UER mapping fix + GAME routing ticket",
+      "scheduled_for": "2026-08-06"
+    }
+  ]
+}
