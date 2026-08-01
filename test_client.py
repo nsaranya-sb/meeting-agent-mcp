@@ -1,10 +1,9 @@
 """
-Standalone MCP client test — connects to server.py over stdio (the same
-transport Claude Code uses) and calls each tool, to prove the server works
-before wiring it into an actual Claude Code session.
+Standalone MCP client test — connects to server.py over stdio and exercises
+the risk-tiered confirmation flow (auto-run for Slack/Calendar, 2-phase proposed -> confirm for Jira).
 
 Run:
-    python3 test_client.py
+    .venv/bin/python3 test_client.py
 """
 import asyncio
 import json
@@ -17,6 +16,12 @@ SERVER_PATH = os.path.join(os.path.dirname(__file__), "server.py")
 
 
 async def main():
+    # Clean state.json, pending_batches.json, and audit_log.jsonl before run
+    for fname in ["state.json", "pending_batches.json", "audit_log.jsonl"]:
+        fpath = os.path.join(os.path.dirname(__file__), fname)
+        if os.path.exists(fpath):
+            os.remove(fpath)
+
     params = StdioServerParameters(command=sys.executable, args=[SERVER_PATH])
 
     async with stdio_client(params) as (read, write):
@@ -29,38 +34,60 @@ async def main():
                 print(f"- {t.name}: {t.description.strip().splitlines()[0]}")
             print()
 
-            print("=== Calling create_jira_ticket ===")
-            result = await session.call_tool(
-                "create_jira_ticket",
+            print("=== 1. Proposing Jira Tickets (CONFIRMED Tier - Phase 1) ===")
+            prop_result = await session.call_tool(
+                "propose_jira_tickets",
                 arguments={
-                    "title": "Fix UER data mapping - replace fragile macro",
-                    "description": "Source spreadsheet columns shifted again, broke Karen's macro. Needs a proper contextual mapping fix, not another patch.",
-                    "priority": "High",
+                    "tickets": [
+                        {
+                            "title": "Fix UER data mapping - replace fragile macro",
+                            "description": "Source spreadsheet columns shifted again, broke Julia's macro. Needs proper contextual mapping fix.",
+                            "priority": "High",
+                        },
+                        {
+                            "title": "Fix GAME request form password reset routing issue",
+                            "description": "GAME request form is routing password resets to wrong queue because Chatbot is misrouting intent.",
+                            "priority": "Medium",
+                        },
+                    ]
                 },
             )
-            print(result.content[0].text)
+            prop_text = prop_result.content[0].text
+            print(prop_text)
             print()
 
-            print("=== Calling post_slack_summary ===")
-            result = await session.call_tool(
+            # Parse batch_id from proposal JSON result
+            prop_data = json.loads(prop_text)
+            batch_id = prop_data.get("batch_id")
+
+            print("=== 2. Posting Slack Summary (AUTO-RUN Tier) ===")
+            slack_result = await session.call_tool(
                 "post_slack_summary",
                 arguments={
                     "channel": "#project-updates",
-                    "summary": "IAM sync: UER mapping fix raised as high priority ticket. GAME routing issue logged medium priority. Follow-up in 1 week given audit timeline.",
+                    "summary": "IAM sync: UER mapping fix ticket proposed (High). GAME routing issue proposed (Medium). Follow-up check-in in 1 week.",
                 },
             )
-            print(result.content[0].text)
+            print(slack_result.content[0].text)
             print()
 
-            print("=== Calling schedule_followup ===")
-            result = await session.call_tool(
+            print("=== 3. Scheduling Follow-up (AUTO-RUN Tier) ===")
+            cal_result = await session.call_tool(
                 "schedule_followup",
                 arguments={
-                    "title": "Check status of UER mapping fix + GAME routing ticket",
+                    "title": "IAM Sync check-in on UER mapping fix and GAME routing issue",
                     "days_from_now": 7,
                 },
             )
-            print(result.content[0].text)
+            print(cal_result.content[0].text)
+            print()
+
+            print(f"=== 4. Confirming Jira Ticket Batch '{batch_id}' (CONFIRMED Tier - Phase 2) ===")
+            confirm_result = await session.call_tool(
+                "confirm_action",
+                arguments={"batch_id": batch_id},
+            )
+            print(confirm_result.content[0].text)
             print()
 
     state_path = os.path.join(os.path.dirname(__file__), "state.json")
@@ -68,6 +95,13 @@ async def main():
         print("=== Resulting state.json ===")
         with open(state_path) as f:
             print(json.dumps(json.load(f), indent=2))
+        print()
+
+    audit_path = os.path.join(os.path.dirname(__file__), "audit_log.jsonl")
+    if os.path.exists(audit_path):
+        print("=== Resulting audit_log.jsonl ===")
+        with open(audit_path) as f:
+            print(f.read())
 
 
 if __name__ == "__main__":

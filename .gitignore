@@ -147,8 +147,10 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Environments & Local Data Files
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -156,6 +158,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+state.json
+audit_log.jsonl
+pending_batches.json
 
 # Spyder project settings
 .spyderproject

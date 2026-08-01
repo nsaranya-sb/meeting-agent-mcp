@@ -4,7 +4,7 @@ you can show the interviewer (e.g. cat state.json after a few tool calls).
 """
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 STATE_FILE = os.path.join(os.path.dirname(__file__), "state.json")
 
@@ -30,7 +30,7 @@ def create_ticket(title: str, description: str, priority: str = "Medium") -> dic
         "description": description,
         "priority": priority,
         "status": "To Do",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     state["tickets"].append(ticket)
     _save(state)
@@ -42,7 +42,7 @@ def post_slack_summary(channel: str, summary: str) -> dict:
     post = {
         "channel": channel,
         "summary": summary,
-        "posted_at": datetime.utcnow().isoformat(),
+        "posted_at": datetime.now(timezone.utc).isoformat(),
     }
     state["slack_posts"].append(post)
     _save(state)
@@ -53,7 +53,7 @@ def schedule_followup(title: str, days_from_now: int = 3) -> dict:
     state = _load()
     followup = {
         "title": title,
-        "scheduled_for": (datetime.utcnow() + timedelta(days=days_from_now)).date().isoformat(),
+        "scheduled_for": (datetime.now(timezone.utc) + timedelta(days=days_from_now)).date().isoformat(),
     }
     state["followups"].append(followup)
     _save(state)

@@ -1,17 +1,20 @@
-# After-Meeting Agent — MCP Demo Prototype
+# After-Meeting Agent — MCP Portfolio Server
 
-An MCP server exposing 3 tools that turn a meeting transcript into concrete
-follow-through: a Jira ticket, a Slack summary, and a scheduled follow-up.
-Built as an interview demo for an AI Centre of Excellence panel.
+An MCP server exposing tools to convert meeting transcripts into structured follow-through actions: Jira tickets, Slack summaries, and calendar follow-ups. Built as a portfolio project demonstrating real REST API integration, risk-tiered human-in-the-loop confirmation, and audit logging.
 
 ## What it demonstrates
 
-- Real MCP server (not a mock CLI) exposing typed tools with docstrings Claude
-  reads to decide when/how to call them
-- An agentic workflow: unstructured input (transcript) → reasoning → multiple
-  tool calls → structured, auditable output (state.json)
-- Extensible pattern: swapping mock_store.py functions for real Jira/Slack/
-  Calendar API calls is a drop-in change, not a rewrite
+1. **Modular Integration Architecture**:
+   - `integrations/base.py`: Clean abstract interfaces (`JiraIntegrationBase`, `SlackIntegrationBase`, `CalendarIntegrationBase`).
+   - `integrations/jira_real.py`: Production-grade REST client using Atlassian Jira API v3 (Basic Auth with API Token).
+   - `integrations/*_mock.py`: Mock implementations for Slack & Calendar (and Jira offline fallback).
+2. **Risk-Tiered Execution & Batched Human-in-the-Loop Confirmation**:
+   - **AUTO-RUN Tier**: `post_slack_summary` and `schedule_followup` execute immediately (reversible / mock side-effects).
+   - **CONFIRMED Tier (2-Phase Batched)**: `propose_jira_tickets` stages ALL action items into a pending batch without creating anything external. `confirm_action(batch_id)` executes creation only after explicit user confirmation in chat.
+3. **Structured Audit Log**:
+   - Append-only `audit_log.jsonl` tracking every auto-run action and 2-phase confirmation event (including propose vs confirm timestamps and elapsed seconds).
+4. **Fail-Fast Environment Configuration**:
+   - `config.py` loads variables from `.env` and validates credentials on startup when `JIRA_MODE=real`.
 
 ## Setup
 
@@ -20,18 +23,42 @@ Set up a virtual environment and install dependencies:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install "mcp<2.0.0"
+pip install "mcp<2.0.0" httpx python-dotenv pytest
 ```
 
-Smoke test the server using the standalone client:
+Configure environment variables (copy `.env.example` to `.env`):
+
+```bash
+cp .env.example .env
+```
+
+For live Jira integration, set in `.env`:
+```env
+JIRA_MODE=real
+JIRA_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your_jira_api_token
+JIRA_PROJECT_KEY=AICOE
+```
+For local mock testing, keep `JIRA_MODE=mock`.
+
+## Running Tests
+
+Run unit tests (includes HTTP mocking for Jira REST API):
+
+```bash
+pytest tests/
+```
+
+Run stdio client integration test:
 
 ```bash
 python3 test_client.py
 ```
 
-## Option A: Claude Code / Antigravity
+## MCP Configuration (Claude Code / Antigravity / Claude Desktop)
 
-Add to your MCP config (`claude mcp add` or `.claude/mcp.json` / `mcp_config.json`):
+Add to your MCP configuration file (`.claude/mcp.json` or `mcp_config.json`):
 
 ```json
 {
@@ -44,45 +71,34 @@ Add to your MCP config (`claude mcp add` or `.claude/mcp.json` / `mcp_config.jso
 }
 ```
 
-Then in an agent session:
+## Agent Interaction Workflow
 
-```
-Read sample_transcript.txt. Identify action items, decisions, and any
-follow-up cadence mentioned. For each action item, create a Jira ticket
-with an appropriate priority. Post a summary of the meeting to
-#project-updates. Schedule any follow-ups mentioned at the cadence discussed.
-```
+In a chat session, ask the agent to process a transcript:
 
-## Option B: Claude Desktop
+> "Read sample_transcript.txt. Identify action items, decisions, and follow-up cadence. Propose Jira tickets for the action items, post a Slack summary to #project-updates, and schedule follow-ups."
 
-Same config format, in `claude_desktop_config.json` under `mcpServers`.
-Restart Claude Desktop, then paste the transcript into chat with the same
-instruction as above.
+The agent will:
+1. Auto-run `post_slack_summary` and `schedule_followup`.
+2. Propose Jira tickets via `propose_jira_tickets` and display a summary preview with a `batch_id` (e.g. `batch-77a2219f`).
+3. Pause and ask for confirmation.
+4. When you reply "Confirm", the agent calls `confirm_action(batch_id="batch-77a2219f")` to create the tickets in Jira.
 
-## Demo script (what to say live)
+## Demo Script (What to say live)
 
-1. **Set up the problem** (30 sec): "IT transformation teams lose real time
-   re-collating what happened in a meeting into tickets, comms, and
-   follow-ups. This agent closes that loop automatically."
-2. **Show the server code** (30 sec): open `server.py`, point out the 3 tools
-   and their docstrings — "Claude reads these to decide which tool to call
-   and with what arguments, this is the MCP contract."
-3. **Run the demo live**: paste the instruction + `sample_transcript.txt`
-   into Claude Code / Desktop, let it work.
-4. **Show the result**: `cat state.json` — a ticket was created with the
-   Julia/UER context preserved, a second lower-priority ticket for the
-   routing issue, a Slack summary posted, a follow-up scheduled at the
-   1-week cadence (not the default) — showing it picked up nuance from the
-   transcript, not just keyword-matched.
-5. **Close with the roadmap** (30 sec): "In production this would swap
-   mock_store for real Jira/Slack/Calendar APIs, add a human-in-the-loop
-   confirmation step before any ticket/calendar action, and log every tool
-   call for audit — which matters a lot in a regulated environment."
+1. **Problem Statement** (30 sec): "Meeting follow-through breaks down because taking action requires multiple tools and manual triage. This agent closes that loop safely."
+2. **Architecture** (30 sec): "We separate risk into two tiers. Slack posts and follow-up reminders run automatically. External write actions like Jira tickets require explicit, batched human-in-the-loop approval."
+3. **Live Demonstration**: Show proposing tickets, reviewing preview, and confirming execution.
+4. **Auditability**: `cat audit_log.jsonl` — show exact records of auto actions and confirm events with timing metrics.
 
-## Files
+## File Map
 
-- `server.py` — the MCP server and tool definitions
-- `mock_store.py` — mock backing store (swap for real APIs later)
-- `sample_transcript.txt` — demo input
-- `test_client.py` — standalone MCP stdio client verification script
-- `state.json` — generated after first run, shows what the agent created
+- `server.py` — FastMCP server exposing risk-tiered tools
+- `config.py` — Environment configuration & credential validator
+- `.env.example` — Environment variable template
+- `confirmation.py` — Batched 2-phase confirmation engine
+- `audit_log.py` — Append-only audit logger (`audit_log.jsonl`)
+- `integrations/` — Abstract interfaces & REST/Mock implementations
+- `mock_store.py` — File-backed mock store (`state.json`)
+- `sample_transcript.txt` — Input transcript for demo
+- `test_client.py` — Stdio client test script
+- `tests/` — Pytest suite (`test_jira_real.py`, `test_confirmation_flow.py`)
